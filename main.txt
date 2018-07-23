@@ -1,0 +1,107 @@
+#include<reg51.h>
+#include<intrins.h>
+#define uchar unsigned char
+#define uint unsigned int
+#define LCDPORT P0
+sbit LCDE=P2^0;
+sbit LCDRW=P2^1;
+sbit LCDRS=P2^2;
+unsigned long count,freq;
+uint count_1s,mul,k;
+uchar tab[]={"0000000Hz"};
+
+void delay(uint x){
+	int j;
+	for(x;x>0;x--)
+	for(j=255;j>0;j--);
+}
+void delay_ms(){
+	uint i;
+	for(i=0;i<250;i++);
+}
+void WriteCMD(uchar Command){
+	delay_ms(); //先延时。
+	LCDE=1; //然后把改为写入命令状态。
+	LCDRS=0;
+	LCDRW=0;
+	LCDPORT=Command; //再输出命令。
+	LCDE=0; //最后执行命令。
+}
+void init(){
+	LCDRW=0;
+	LCDE=0;
+	WriteCMD(0x38);	 //开显示
+	WriteCMD(0x0c);	  //开显示不显示光标
+	WriteCMD(0x06);	  //写一个指针加1
+	WriteCMD(0x01);	   //清屏
+	WriteCMD(0x80);	   //设置数据指针起点
+}
+void WriteData(uchar dat){
+	delay_ms(); //先延时。
+	LCDE=1; //然后改为写入数据状态。
+	LCDRS=1;
+	LCDRW=0;
+	LCDPORT=dat; //再输出数据。
+	LCDE=0; //最后显示数据。
+ }
+
+
+void main(){
+	uint i,j;
+	count_1s=19;
+	mul=0;
+	EA=1;
+	ET0=1;
+	ET1=1;
+	TMOD=0x51;
+	TH0=0x3C;
+	TL0=0xB0;
+	TH1=0x00;
+	TL1=0x00;
+	init();	
+	TR0=1;
+	TR1=1;
+	P1=0x00;
+	while(1){ 
+		for (j=0;j<60;j++){
+			for (i=0;i<sizeof(tab);i++){
+				WriteData(tab[i]);  
+			}
+			WriteCMD(0x80);
+		}	
+		if (freq>1 && freq<97)
+			P1=0x00;
+		else if(freq>=97 && freq<100)
+			P1=0x01;
+		else if(freq>=100 && freq<498)
+			P1=0x02;
+		else if(freq>=498 && freq<1000)
+			P1=0x03;
+		else if(freq>1000)
+			P1=0x04;		
+	}
+}
+void timer () interrupt 1{      ／／定时器T0中断程序
+	TH0=0x3C;
+	TL0=0xB0;
+	count_1s--;
+	if (count_1s==0){
+		count=65536*mul+256*TH1+TL1;／／1s计时时间到，脉冲计数计算
+		freq=count/1000;
+		for (k=0;k<7;k++){
+			tab[6-k]=count%10+'0';
+			count=count/10;
+		}
+		count_1s=20;		／／所有计数，计时变量初始化
+		count=0;
+		mul=0;
+		TH1=0x00;
+		TL1=0x00;
+	}	
+}
+void counter() interrupt 3{／／计数器T1中断程序
+		TH1=0x00;
+		TL1=0x00;
+		mul++;
+}							 
+
